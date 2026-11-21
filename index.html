@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Trading Hub - AI Bulk Trader</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>⚡ MY TRADING HUB</h1>
+    <span id="status" class="badge offline">Logged Out</span>
+  </header>
+
+  <!-- Deriv OAuth Sign-In Box -->
+  <section class="card" id="loginCard">
+    <h2>Deriv Account Access</h2>
+    <p class="subtext">Sign in securely through Deriv's official portal to load your Demo & Real accounts automatically.</p>
+    <button class="btn-deriv" onclick="loginWithDeriv()">🔐 Log in with Deriv</button>
+  </section>
+
+  <!-- Connected Account Switcher -->
+  <section class="card hidden" id="accountCard">
+    <div class="account-header">
+      <div>
+        <label>Active Account</label>
+        <select id="accountSwitcher" onchange="switchAccount()"></select>
+      </div>
+      <div class="balance-display">
+        <label>Balance</label>
+        <strong><span id="balance">0.00</span> <span id="currency">USD</span></strong>
+      </div>
+    </div>
+    <button class="btn-logout" onclick="logoutDeriv()">Log Out</button>
+  </section>
+
+  <!-- Live Market Tick Stream -->
+  <section class="card">
+    <h2>Live Market Feed</h2>
+    <select id="marketSelect" onchange="subscribeTicks()">
+      <option value="R_100">Volatility 100 Index</option>
+      <option value="R_75">Volatility 75 Index</option>
+      <option value="R_50">Volatility 50 Index</option>
+      <option value="R_10">Volatility 10 Index</option>
+      <option value="1HZ100V">Volatility 100 (1s) Index</option>
+    </select>
+    <div class="price-box">
+      <span>Live Price:</span>
+      <strong id="livePrice">---</strong>
+    </div>
+  </section>
+
+  <!-- AI Market Analyzer -->
+  <section class="card">
+    <h2>AI Market Analyzer (Last 30 Ticks)</h2>
+    <div class="ai-box">
+      <div class="ai-signal-header">
+        <span>AI Signal: <strong id="aiSignal">COLLECTING DATA...</strong></span>
+        <span id="aiConfidence" class="confidence-pill">0%</span>
+      </div>
+      <p id="aiReason" class="subtext">Log in and wait for 10 ticks to analyze momentum & digits...</p>
+      
+      <div class="stats-grid">
+        <div class="stat-item">
+          <small>Rise / Fall</small>
+          <strong id="trendStat">50% / 50%</strong>
+        </div>
+        <div class="stat-item">
+          <small>Even / Odd Digits</small>
+          <strong id="digitStat">50% / 50%</strong>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bulk Trader Execution -->
+  <section class="card">
+    <h2>Bulk Trader</h2>
+    <div class="input-row">
+      <div>
+        <label>Stake ($)</label>
+        <input type="number" id="stakeInput" value="1" min="0.35" step="0.5" />
+      </div>
+      <div>
+        <label>Ticks</label>
+        <input type="number" id="durationInput" value="5" min="1" max="10" />
+      </div>
+      <div>
+        <label>Bulk Trades</label>
+        <input type="number" id="bulkCountInput" value="3" min="1" max="10" />
+      </div>
+    </div>
+
+    <button id="aiExecBtn" class="btn-ai" onclick="executeAISignal()" disabled>
+      ⚡ EXECUTE AI SIGNAL (BULK)
+    </button>
+
+    <div class="btn-grid">
+      <button class="btn-rise" onclick="executeBulk('CALL')">BULK RISE</button>
+      <button class="btn-fall" onclick="executeBulk('PUT')">BULK FALL</button>
+      <button class="btn-even" onclick="executeBulk('DIGITEVEN')">BULK EVEN</button>
+      <button class="btn-odd" onclick="executeBulk('DIGITODD')">BULK ODD</button>
+    </div>
+  </section>
+
+  <!-- Execution Log -->
+  <section class="card">
+    <h2>Execution Log</h2>
+    <div id="tradeLog" class="log-box">Ready...</div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>
