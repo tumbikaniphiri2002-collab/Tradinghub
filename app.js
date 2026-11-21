@@ -1,5 +1,5 @@
 // REPLACE THIS WITH YOUR REGISTERED DERIV APP ID FROM ://deriv.com
-const APP_ID = "YOUR_APP_ID";
+const APP_ID = "pat_1289ef3d30d545fc2e2b6089540b0aa4b4d5891bdd3d84c234f19de2d781289b";
 
 let ws;
 let currentSubId = null;
