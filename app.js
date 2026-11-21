@@ -1,5 +1,8 @@
-// REPLACE THIS WITH YOUR REGISTERED DERIV APP ID FROM ://deriv.com
-const APP_ID = "pat_1289ef3d30d545fc2e2b6089540b0aa4b4d5891bdd3d84c234f19de2d781289b";
+// PUT YOUR REGISTERED DERIV APP ID HERE (numbers only, keep the quotes)
+const APP_ID = "351tNZiIAHYfpVlNrstTM";
+
+const WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`;
+const OAUTH_URL = `https://oauth.deriv.com/oauth2/authorize?app_id=${APP_ID}&l=EN&brand=deriv`;
 
 let ws;
 let currentSubId = null;
@@ -8,35 +11,37 @@ let userCurrency = "USD";
 let recommendedContract = null;
 let accounts = [];
 
-// Run on page load to check if Deriv just redirected back with OAuth tokens
 window.onload = () => {
   parseOAuthCallback();
-  const savedAccounts = localStorage.getItem("deriv_accounts");
-  if (savedAccounts) {
-    accounts = JSON.parse(savedAccounts);
-    if (accounts.length > 0) {
-      populateAccountSwitcher();
-      connectDeriv(accounts[0].token);
+  try {
+    const saved = localStorage.getItem("deriv_accounts");
+    if (saved) {
+      accounts = JSON.parse(saved);
+      if (accounts.length > 0) {
+        populateAccountSwitcher();
+        connectDeriv(accounts[0].token);
+      }
     }
+  } catch (e) {
+    localStorage.removeItem("deriv_accounts");
   }
 };
 
 function loginWithDeriv() {
   if (APP_ID === "YOUR_APP_ID") {
-    alert("First register your App ID at ://deriv.com and paste it into app.js!");
+    alert("First register your App ID at api.deriv.com and paste it into app.js!");
     return;
   }
-  const oauthUrl = `https://deriv.com{APP_ID}&l=EN&brand=deriv`;
-  window.location.href = oauthUrl;
+  window.location.href = OAUTH_URL;
 }
 
 function parseOAuthCallback() {
   const params = new URLSearchParams(window.location.search);
-  const parsedAccounts = [];
+  const parsed = [];
   let i = 1;
 
   while (params.has(`acct${i}`) && params.has(`token${i}`)) {
-    parsedAccounts.push({
+    parsed.push({
       acct: params.get(`acct${i}`),
       token: params.get(`token${i}`),
       cur: params.get(`cur${i}`) || "USD"
@@ -44,11 +49,15 @@ function parseOAuthCallback() {
     i++;
   }
 
-  if (parsedAccounts.length > 0) {
-    // Prioritize Demo account (starts with VRTC) first for safety
-    parsedAccounts.sort((a, b) => (a.acct.startsWith("VRTC") ? -1 : 1));
-    localStorage.setItem("deriv_accounts", JSON.stringify(parsedAccounts));
-    // Clean tokens out of the browser URL bar
+  if (parsed.length > 0) {
+    // Demo accounts (VRTC) first, for safety
+    parsed.sort((a, b) => {
+      const aDemo = a.acct.startsWith("VRTC") ? 0 : 1;
+      const bDemo = b.acct.startsWith("VRTC") ? 0 : 1;
+      return aDemo - bDemo;
+    });
+    localStorage.setItem("deriv_accounts", JSON.stringify(parsed));
+    // Remove tokens from the address bar
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 }
@@ -68,30 +77,43 @@ function populateAccountSwitcher() {
 function switchAccount() {
   const index = document.getElementById("accountSwitcher").value;
   const selected = accounts[index];
-  if (selected) {
-    if (ws) ws.close();
-    connectDeriv(selected.token);
-  }
+  if (selected) connectDeriv(selected.token);
 }
 
 function logoutDeriv() {
   localStorage.removeItem("deriv_accounts");
-  if (ws) ws.close();
+  if (ws) {
+    ws.onclose = null;
+    ws.close();
+  }
   location.reload();
 }
 
 function logMessage(msg) {
   const logBox = document.getElementById("tradeLog");
   const time = new Date().toLocaleTimeString();
-  logBox.innerHTML = `<div>[${time}] ${msg}</div>` + logBox.innerHTML;
+  const row = document.createElement("div");
+  row.textContent = `[${time}] ${msg}`;
+  logBox.prepend(row);
 }
 
 function connectDeriv(token) {
-  ws = new WebSocket(`wss://://derivws.com{APP_ID}`);
+  // Close any old connection first
+  if (ws && ws.readyState <= WebSocket.OPEN) {
+    ws.onclose = null;
+    ws.close();
+  }
+  currentSubId = null;
+
+  ws = new WebSocket(WS_URL);
 
   ws.onopen = () => {
     logMessage("Connecting to Deriv...");
     ws.send(JSON.stringify({ authorize: token }));
+  };
+
+  ws.onerror = () => {
+    logMessage("❌ Connection error. Check your internet and App ID.");
   };
 
   ws.onmessage = (event) => {
@@ -121,6 +143,10 @@ function connectDeriv(token) {
     }
 
     if (data.msg_type === "tick") {
+      // Ignore leftover ticks from a market we switched away from
+      const selected = document.getElementById("marketSelect").value;
+      if (data.tick.symbol !== selected) return;
+
       currentSubId = data.tick.id;
       const quote = data.tick.quote;
       document.getElementById("livePrice").textContent = quote;
@@ -133,9 +159,13 @@ function connectDeriv(token) {
   };
 
   ws.onclose = () => {
+    currentSubId = null;
+    tickHistory = [];
+    recommendedContract = null;
     document.getElementById("status").textContent = "Disconnected";
     document.getElementById("status").className = "badge offline";
     document.getElementById("aiExecBtn").disabled = true;
+    logMessage("⚠️ Disconnected from server.");
   };
 }
 
@@ -144,12 +174,15 @@ function subscribeTicks() {
 
   if (currentSubId) {
     ws.send(JSON.stringify({ forget: currentSubId }));
+    currentSubId = null;
   }
 
   tickHistory = [];
   recommendedContract = null;
   document.getElementById("aiSignal").textContent = "COLLECTING DATA...";
   document.getElementById("aiConfidence").textContent = "0%";
+  document.getElementById("aiReason").textContent =
+    "Waiting for at least 10 ticks to analyze momentum & digits...";
   document.getElementById("aiExecBtn").disabled = true;
 
   const symbol = document.getElementById("marketSelect").value;
@@ -228,16 +261,26 @@ function executeBulk(contractType) {
   const duration = parseInt(document.getElementById("durationInput").value, 10);
   const bulkCount = parseInt(document.getElementById("bulkCountInput").value, 10);
 
-  if (stake < 0.35 || bulkCount < 1 || bulkCount > 10) {
+  if (isNaN(stake) || stake < 0.35 || isNaN(bulkCount) || bulkCount < 1 || bulkCount > 10) {
     alert("Check your Stake (min $0.35) and Bulk Count (1–10).");
+    return;
+  }
+
+  // Rise/Fall needs 5-10 ticks; digit contracts allow 1-10
+  const isRiseFall = contractType === "CALL" || contractType === "PUT";
+  const minTicks = isRiseFall ? 5 : 1;
+  if (isNaN(duration) || duration < minTicks || duration > 10) {
+    alert(`Ticks must be between ${minTicks} and 10 for this contract type.`);
     return;
   }
 
   logMessage(`🚀 Sending ${bulkCount}x ${contractType} trades ($${stake} each)...`);
 
+  // Stagger orders by 250ms to respect rate limits
   for (let i = 0; i < bulkCount; i++) {
     setTimeout(() => {
-      const request = {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify({
         buy: 1,
         price: stake,
         parameters: {
@@ -249,8 +292,7 @@ function executeBulk(contractType) {
           duration_unit: "t",
           symbol: symbol
         }
-      };
-      ws.send(JSON.stringify(request));
+      }));
     }, i * 250);
   }
 }
